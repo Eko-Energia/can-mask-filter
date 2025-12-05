@@ -2,7 +2,7 @@ import unittest
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from filter_calculator import calculate_mask_filter
+from filter_calculator import calculate_mask_filter, calculate_multiple_masks_filters
 
 class TestFilterCalculator(unittest.TestCase):
     def test_single_id(self):
@@ -35,6 +35,52 @@ class TestFilterCalculator(unittest.TestCase):
         mask, filter_val = calculate_mask_filter([])
         self.assertEqual(mask, 0)
         self.assertEqual(filter_val, 0)
+
+    def test_multi_filters_perfect(self):
+        # Select 0x100 and 0x200. Unselected 0x300.
+        # Max filters 2. Should use 2 filters for perfect match.
+        selected = [0x100, 0x200]
+        unselected = [0x300]
+        results, collisions = calculate_multiple_masks_filters(selected, unselected, max_filters=2)
+        
+        self.assertEqual(len(results), 2)
+        self.assertEqual(len(collisions), 0)
+        # Verify masks/filters
+        # 1. 0x100 -> Mask 0x7FF, Filter 0x100
+        # 2. 0x200 -> Mask 0x7FF, Filter 0x200
+        masks = [r[0] for r in results]
+        filters = [r[1] for r in results]
+        self.assertIn(0x7FF, masks)
+        self.assertIn(0x100, filters)
+        self.assertIn(0x200, filters)
+        
+    def test_multi_filters_constrained(self):
+        
+        selected = [0x100, 0x103]
+        unselected = [0x101, 0x102]
+        results, collisions = calculate_multiple_masks_filters(selected, unselected, max_filters=1)
+        
+        self.assertEqual(len(results), 1)
+        self.assertEqual(len(collisions), 2)
+        self.assertIn(0x101, collisions)
+        self.assertIn(0x102, collisions)
+        
+    def test_multi_filters_optimized(self):
+        selected = [0x100, 0x101, 0x200, 0x201]
+        unselected = [0x102, 0x202]
+        results, collisions = calculate_multiple_masks_filters(selected, unselected, max_filters=2)
+        
+        self.assertEqual(len(results), 1)
+        self.assertEqual(len(collisions), 0)
+        
+    def test_multi_filters_forced_split(self):
+        
+        selected = [0x100, 0x101, 0x200, 0x201]
+        unselected = [0x102, 0x202, 0x300]
+        results, collisions = calculate_multiple_masks_filters(selected, unselected, max_filters=2)
+        
+        self.assertEqual(len(results), 2)
+        self.assertEqual(len(collisions), 0)
 
 if __name__ == '__main__':
     unittest.main()

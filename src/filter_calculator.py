@@ -25,5 +25,103 @@ def calculate_mask_filter(selected_ids):
 
     return mask, filter_val
 
+def calculate_multiple_masks_filters(selected_ids, unselected_ids, max_filters=1):
+    """
+    Calculates up to `max_filters` mask/filter pairs to cover `selected_ids`
+    while minimizing collisions with `unselected_ids`.
+    
+    Returns:
+       results: List of tuples (mask, filter_val)
+       collisions: List of unselected_ids that are wrongly accepted
+    """
+    if not selected_ids:
+        return [], []
+        
+    selected_ids = sorted(list(set(selected_ids)))
+    
+    # 1. Start with one cluster per selected ID (perfect filtering)
+    clusters = [[sid] for sid in selected_ids]
+    
+    # Helper to calculate mask/filter for a cluster
+    def calc_mf(ids):
+        return calculate_mask_filter(ids)
+        
+    # Helper to count collisions for a cluster
+    def count_collisions(cluster_ids):
+        m, f = calc_mf(cluster_ids)
+        cols = 0
+        for uid in unselected_ids:
+            if (uid & m) == (f & m):
+                cols += 1
+        return cols
+        
+    # 2. Greedy merge loop
+    # We want to reduce len(clusters) to <= max_filters
+    # But we prioritize strict correctness first (0 collisions)
+    # If we are under max_filters, we stop.
+    
+    while len(clusters) > 1:
+        best_merge = None
+        min_added_collisions = float('inf')
+        
+        # Try to find a merge that costs the least collisions
+        # Optimization: O(N^2) per step can be slow if N is large.
+        # But for N=100 it's fine.
+        
+        for i in range(len(clusters)):
+            for j in range(i + 1, len(clusters)):
+                new_cluster = clusters[i] + clusters[j]
+                
+                # Calculate collisions for merged cluster
+                # Optimization: only check against unselected_ids that match basic constraints?
+                # For now, brute force check is safest.
+                cols = count_collisions(new_cluster)
+                
+                # We subtract individual collisions to see *added* cost?
+                # Actually we just want minimal total collisions for the new state.
+                # But here we just compare 'cols' of the potential new cluster.
+                # Ideally we want cols == 0.
+                
+                if cols < min_added_collisions:
+                    min_added_collisions = cols
+                    best_merge = (i, j)
+                
+                if min_added_collisions == 0:
+                    break # Optimal found, take it
+            if min_added_collisions == 0:
+                break
+                
+        # Decision: Merge if optimal (0 collisions) OR if we MUST merge (len > max)
+        should_merge = False
+        if min_added_collisions == 0:
+            should_merge = True
+        elif len(clusters) > max_filters:
+            should_merge = True
+            
+        if should_merge and best_merge:
+            i, j = best_merge
+            new_c = clusters[i] + clusters[j]
+            # Remove j first (larger index)
+            clusters.pop(j)
+            clusters.pop(i)
+            clusters.append(new_c)
+        else:
+            # We are safe to stop
+            break
+            
+    # 3. Calculate final results
+    results = []
+    final_collisions = set()
+    
+    for cluster in clusters:
+        m, f = calc_mf(cluster)
+        results.append((m, f))
+        # Collect actual collisions
+        for uid in unselected_ids:
+            if (uid & m) == (f & m):
+                final_collisions.add(uid)
+                
+    return results, sorted(list(final_collisions))
+
 def format_hex_bin(value, bits=11):
     return f"0x{value:03X} (bin: {value:0{bits}b})"

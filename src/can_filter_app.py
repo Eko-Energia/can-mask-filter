@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import cantools
 import os
-from filter_calculator import calculate_mask_filter, format_hex_bin
+from filter_calculator import calculate_mask_filter, calculate_multiple_masks_filters, format_hex_bin
 
 class CanFilterApp:
     def __init__(self, root):
@@ -31,6 +31,9 @@ class CanFilterApp:
         
         self.load_btn = ttk.Button(top_frame, text="Load DBC File", command=self.load_dbc)
         self.load_btn.pack(side=tk.LEFT, padx=5)
+
+        self.clear_btn = ttk.Button(top_frame, text="Clear Selection", command=self.clear_selection)
+        self.clear_btn.pack(side=tk.LEFT, padx=5)
         
         self.search_var = tk.StringVar()
         self.search_var.trace("w", self.filter_list)
@@ -75,8 +78,14 @@ class CanFilterApp:
         bottom_frame = ttk.Frame(self.root, padding="10")
         bottom_frame.pack(fill=tk.X)
         
+        # Max Filters Config
+        self.max_filters_var = tk.IntVar(value=3)
+        ttk.Label(bottom_frame, text="Max Filters:").pack(side=tk.LEFT, padx=5)
+        self.max_filters_spin = ttk.Spinbox(bottom_frame, from_=1, to=20, textvariable=self.max_filters_var, width=5)
+        self.max_filters_spin.pack(side=tk.LEFT, padx=5)
+
         self.calc_btn = ttk.Button(bottom_frame, text="Calculate Mask & Filter", command=self.calculate)
-        self.calc_btn.pack(side=tk.TOP, pady=5)
+        self.calc_btn.pack(side=tk.LEFT, padx=20)
         
         # Result Display
         self.result_frame = ttk.LabelFrame(bottom_frame, text="Results", padding="10")
@@ -106,6 +115,10 @@ class CanFilterApp:
             messagebox.showinfo("Success", f"Loaded {len(self.all_messages)} messages.")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load DBC: {e}")
+
+    def clear_selection(self):
+        self.checked_ids.clear()
+        self.update_list(self.all_messages)
 
     def filter_list(self, *args):
         query = self.search_var.get().lower()
@@ -193,28 +206,44 @@ class CanFilterApp:
             return
             
         selected_ids = sorted(list(self.checked_ids))
-        
-        mask, filter_val = calculate_mask_filter(selected_ids)
-        
-        res_text = f"Selected IDs: {len(selected_ids)}\n\n"
-        res_text += f"Mask:   {format_hex_bin(mask)}\n"
-        res_text += f"Filter: {format_hex_bin(filter_val)}\n"
-        
-        # Check coverage
-        collisions = []
+        unselected_ids = []
         if self.db:
             for msg in self.db.messages:
-                if msg.frame_id not in selected_ids:
-                    if (msg.frame_id & mask) == (filter_val & mask):
-                        collisions.append(f"0x{msg.frame_id:X} ({msg.name})")
+                if msg.frame_id not in self.checked_ids:
+                    unselected_ids.append(msg.frame_id)
         
+        try:
+            max_filters = int(self.max_filters_var.get())
+        except:
+            max_filters = 1
+            
+        results, collisions = calculate_multiple_masks_filters(selected_ids, unselected_ids, max_filters)
+        
+        res_text = f"Selected IDs: {len(selected_ids)} | Max Filters: {max_filters} | Used: {len(results)}\n\n"
+        
+        for i, (mask, filter_val) in enumerate(results):
+            res_text += f"Set {i+1}:\n"
+            res_text += f"  Mask:   {format_hex_bin(mask)}\n"
+            res_text += f"  Filter: {format_hex_bin(filter_val)}\n"
+            
         if collisions:
-            res_text += f"\nWarning: This mask/filter also accepts {len(collisions)} unselected IDs:\n"
-            res_text += ", ".join(collisions[:5])
+            res_text += f"\nWarning: This accept {len(collisions)} unselected IDs:\n"
+            # Get names for collisions
+            collision_names = []
+            for col_id in collisions:
+                name = "?"
+                if self.db:
+                    try:
+                        name = self.db.get_message_by_frame_id(col_id).name
+                    except:
+                        pass
+                collision_names.append(f"0x{col_id:X} ({name})")
+                
+            res_text += ", ".join(collision_names[:5])
             if len(collisions) > 5:
                 res_text += ", ..."
         else:
-            res_text += "\nPerfect match! No unselected IDs from the DBC are accepted."
+            res_text += "\nPerfect match! No unselected IDs accepted."
             
         self.result_label.config(text=res_text)
 
