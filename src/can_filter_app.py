@@ -137,6 +137,7 @@ class CanFilterApp:
 
     def clear_selection(self):
         self.checked_ids.clear()
+        self.search_var.set("Search ID or Name...")
         self.update_list(self.all_messages)
 
     def filter_list(self, *args):

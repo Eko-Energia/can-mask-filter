@@ -64,23 +64,13 @@ def calculate_multiple_masks_filters(selected_ids, unselected_ids, max_filters=1
         best_merge = None
         min_added_collisions = float('inf')
         
-        # Try to find a merge that costs the least collisions
-        # Optimization: O(N^2) per step can be slow if N is large.
-        # But for N=100 it's fine.
         
         for i in range(len(clusters)):
             for j in range(i + 1, len(clusters)):
                 new_cluster = clusters[i] + clusters[j]
                 
-                # Calculate collisions for merged cluster
-                # Optimization: only check against unselected_ids that match basic constraints?
-                # For now, brute force check is safest.
                 cols = count_collisions(new_cluster)
                 
-                # We subtract individual collisions to see *added* cost?
-                # Actually we just want minimal total collisions for the new state.
-                # But here we just compare 'cols' of the potential new cluster.
-                # Ideally we want cols == 0.
                 
                 if cols < min_added_collisions:
                     min_added_collisions = cols
@@ -91,7 +81,6 @@ def calculate_multiple_masks_filters(selected_ids, unselected_ids, max_filters=1
             if min_added_collisions == 0:
                 break
                 
-        # Decision: Merge if optimal (0 collisions) OR if we MUST merge (len > max)
         should_merge = False
         if min_added_collisions == 0:
             should_merge = True
