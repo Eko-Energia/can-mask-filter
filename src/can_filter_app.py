@@ -37,7 +37,7 @@ class CanFilterApp:
         
         self.search_var = tk.StringVar()
         self.search_var.trace("w", self.filter_list)
-        self.search_entry = ttk.Entry(top_frame, textvariable=self.search_var, width=30, font=('Segoe UI', 12))
+        self.search_entry = ttk.Entry(top_frame, textvariable=self.search_var, width=30, font=('Segoe UI', 10))
         self.search_entry.pack(side=tk.LEFT, padx=5)
         self.search_entry.insert(0, "Search ID or Name...")
         self.search_entry.bind("<FocusIn>", lambda e: self.search_entry.delete(0, tk.END) if self.search_entry.get() == "Search ID or Name..." else None)
@@ -91,8 +91,14 @@ class CanFilterApp:
         self.result_frame = ttk.LabelFrame(bottom_frame, text="Results", padding="10")
         self.result_frame.pack(fill=tk.X, pady=10)
         
-        self.result_label = ttk.Label(self.result_frame, text="Load a DBC file and select IDs to calculate.", font=("Consolas", 11))
-        self.result_label.pack(anchor=tk.W)
+        self.result_text = tk.Text(self.result_frame, font=("Consolas", 10), height=10, state=tk.DISABLED)
+        self.result_scroll = ttk.Scrollbar(self.result_frame, orient=tk.VERTICAL, command=self.result_text.yview)
+        self.result_text.configure(yscrollcommand=self.result_scroll.set)
+        
+        self.result_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.result_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        self.set_result_text("Load a DBC file and select IDs to calculate.")
         
         self.checked_ids = set() # Keep track of checked IDs even when filtering
 
@@ -115,6 +121,19 @@ class CanFilterApp:
             messagebox.showinfo("Success", f"Loaded {len(self.all_messages)} messages.")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load DBC: {e}")
+
+    def set_result_text(self, text):
+        self.result_text.config(state=tk.NORMAL)
+        self.result_text.delete("1.0", tk.END)
+        self.result_text.insert(tk.END, text)
+        self.result_text.config(state=tk.DISABLED)
+        
+        # Update title if content is long
+        num_lines = int(self.result_text.index('end-1c').split('.')[0])
+        if num_lines > 10:
+            self.result_frame.config(text="Results (Scroll to see all)")
+        else:
+            self.result_frame.config(text="Results")
 
     def clear_selection(self):
         self.checked_ids.clear()
@@ -202,7 +221,7 @@ class CanFilterApp:
 
     def calculate(self):
         if not self.checked_ids:
-            self.result_label.config(text="Please select at least one ID.")
+            self.set_result_text("Please select at least one ID.")
             return
             
         selected_ids = sorted(list(self.checked_ids))
@@ -229,7 +248,6 @@ class CanFilterApp:
         if collisions:
             res_text += f"\nWarning: This accept {len(collisions)} unselected IDs:\n"
             # Get names for collisions
-            collision_names = []
             for col_id in collisions:
                 name = "?"
                 if self.db:
@@ -237,15 +255,11 @@ class CanFilterApp:
                         name = self.db.get_message_by_frame_id(col_id).name
                     except:
                         pass
-                collision_names.append(f"0x{col_id:X} ({name})")
-                
-            res_text += ", ".join(collision_names[:5])
-            if len(collisions) > 5:
-                res_text += ", ..."
+                res_text += f"  0x{col_id:X} ({name})\n"
         else:
             res_text += "\nPerfect match! No unselected IDs accepted."
             
-        self.result_label.config(text=res_text)
+        self.set_result_text(res_text)
 
 if __name__ == "__main__":
     root = tk.Tk()
