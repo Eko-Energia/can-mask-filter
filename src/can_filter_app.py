@@ -42,15 +42,22 @@ class CanFilterApp:
         mid_frame.pack(fill=tk.BOTH, expand=True)
         
         # Label
-        ttk.Label(mid_frame, text="Select CAN IDs:").pack(anchor=tk.W)
+        ttk.Label(mid_frame, text="Select CAN IDs (Click checkbox to toggle):").pack(anchor=tk.W)
         
-        # Treeview for multi-column list (ID, Name) with selection
-        columns = ("ID", "Name")
-        self.tree = ttk.Treeview(mid_frame, columns=columns, show="headings", selectmode="extended")
+        # Treeview for multi-column list (Select, ID, Name)
+        columns = ("Select", "ID", "Name")
+        self.tree = ttk.Treeview(mid_frame, columns=columns, show="headings", selectmode="none")
+        
+        self.tree.heading("Select", text="[ ]", command=self.toggle_all)
         self.tree.heading("ID", text="ID (Hex)")
         self.tree.heading("Name", text="Name")
+        
+        self.tree.column("Select", width=40, anchor="center")
         self.tree.column("ID", width=100)
         self.tree.column("Name", width=400)
+        
+        # Bind click for checkbox
+        self.tree.bind("<Button-1>", self.on_tree_click)
         
         # Scrollbar
         scrollbar = ttk.Scrollbar(mid_frame, orient=tk.VERTICAL, command=self.tree.yview)
@@ -73,6 +80,8 @@ class CanFilterApp:
         self.result_label = ttk.Label(self.result_frame, text="Load a DBC file and select IDs to calculate.", font=("Consolas", 10))
         self.result_label.pack(anchor=tk.W)
         
+        self.checked_ids = set() # Keep track of checked IDs even when filtering
+
     def load_dbc(self):
         file_path = filedialog.askopenfilename(filetypes=[("DBC Files", "*.dbc"), ("All Files", "*.*")])
         if not file_path:
@@ -86,6 +95,7 @@ class CanFilterApp:
             
             # Sort by ID
             self.all_messages.sort(key=lambda x: x[0])
+            self.checked_ids.clear()
             
             self.update_list(self.all_messages)
             messagebox.showinfo("Success", f"Loaded {len(self.all_messages)} messages.")
@@ -113,15 +123,76 @@ class CanFilterApp:
             self.tree.delete(item)
             
         for mid, name in items:
-            self.tree.insert("", tk.END, values=(f"0x{mid:X}", name), iid=str(mid)) # Use ID as iid
+            # Check if this ID is in checked_ids
+            check_mark = "☑" if mid in self.checked_ids else "☐"
+            self.tree.insert("", tk.END, values=(check_mark, f"0x{mid:X}", name), iid=str(mid))
+
+    def on_tree_click(self, event):
+        region = self.tree.identify("region", event.x, event.y)
+        if region == "heading":
+            # Handle heading click if needed (e.g. sort), but we used it for toggle all
+            col = self.tree.identify_column(event.x)
+            if col == "#1":
+                self.toggle_all()
+            return
+
+        item_id = self.tree.identify_row(event.y)
+        column = self.tree.identify_column(event.x)
+        
+        if not item_id:
+            return
+            
+        # Toggle if clicked on the checkbox column (#1) or anywhere on the row? 
+        # User said "checkboxes for every element", usually implies clicking the box.
+        # But for better UX, clicking the row to toggle is often nice too if selectmode is none.
+        # Let's stick to column #1 for strict checkbox behavior, or maybe allow row click.
+        # Given "checkboxes", let's make the checkbox column the interactive part.
+        
+        if column == "#1":
+            self.toggle_item(item_id)
+
+    def toggle_item(self, item_id):
+        # item_id is the CAN ID (string)
+        mid = int(item_id)
+        current_values = self.tree.item(item_id, "values")
+        
+        if mid in self.checked_ids:
+            self.checked_ids.remove(mid)
+            new_mark = "☐"
+        else:
+            self.checked_ids.add(mid)
+            new_mark = "☑"
+            
+        self.tree.item(item_id, values=(new_mark, current_values[1], current_values[2]))
+
+    def toggle_all(self):
+        # Check if all currently visible are checked
+        visible_ids = [int(item) for item in self.tree.get_children()]
+        if not visible_ids:
+            return
+            
+        all_checked = all(mid in self.checked_ids for mid in visible_ids)
+        
+        for mid in visible_ids:
+            if all_checked:
+                if mid in self.checked_ids:
+                    self.checked_ids.remove(mid)
+            else:
+                self.checked_ids.add(mid)
+        
+        # Refresh view
+        for item in self.tree.get_children():
+            mid = int(item)
+            check_mark = "☑" if mid in self.checked_ids else "☐"
+            current_values = self.tree.item(item, "values")
+            self.tree.item(item, values=(check_mark, current_values[1], current_values[2]))
 
     def calculate(self):
-        selected_items = self.tree.selection()
-        if not selected_items:
+        if not self.checked_ids:
             self.result_label.config(text="Please select at least one ID.")
             return
             
-        selected_ids = [int(item) for item in selected_items] # item is the iid which is the ID
+        selected_ids = sorted(list(self.checked_ids))
         
         mask, filter_val = calculate_mask_filter(selected_ids)
         
@@ -130,8 +201,6 @@ class CanFilterApp:
         res_text += f"Filter: {format_hex_bin(filter_val)}\n"
         
         # Check coverage
-        # A message passes if (msg_id & mask) == (filter & mask)
-        # Check if any unselected IDs from the loaded DBC would pass (Collision check)
         collisions = []
         if self.db:
             for msg in self.db.messages:
