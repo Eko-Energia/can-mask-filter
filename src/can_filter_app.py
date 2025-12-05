@@ -8,11 +8,13 @@ class CanFilterApp:
     def __init__(self, root):
         self.root = root
         self.root.title("CAN Mask/Filter Calculator")
-        self.root.geometry("800x600")
+        self.root.geometry("800x800")
         
         # Style
         self.style = ttk.Style()
         self.style.theme_use('clam')
+        self.style.configure("Treeview", font=('Segoe UI', 10), rowheight=25)
+        self.style.configure("Treeview.Heading", font=('Segoe UI', 10))
         
         # Data
         self.db = None
@@ -32,7 +34,7 @@ class CanFilterApp:
         
         self.search_var = tk.StringVar()
         self.search_var.trace("w", self.filter_list)
-        self.search_entry = ttk.Entry(top_frame, textvariable=self.search_var, width=30)
+        self.search_entry = ttk.Entry(top_frame, textvariable=self.search_var, width=30, font=('Segoe UI', 12))
         self.search_entry.pack(side=tk.LEFT, padx=5)
         self.search_entry.insert(0, "Search ID or Name...")
         self.search_entry.bind("<FocusIn>", lambda e: self.search_entry.delete(0, tk.END) if self.search_entry.get() == "Search ID or Name..." else None)
@@ -42,7 +44,7 @@ class CanFilterApp:
         mid_frame.pack(fill=tk.BOTH, expand=True)
         
         # Label
-        ttk.Label(mid_frame, text="Select CAN IDs (Click checkbox to toggle):").pack(anchor=tk.W)
+        ttk.Label(mid_frame, text="Select CAN IDs (Click checkbox to toggle):", font=('Segoe UI', 11)).pack(anchor=tk.W)
         
         # Treeview for multi-column list (Select, ID, Name)
         columns = ("Select", "ID", "Name")
@@ -52,9 +54,12 @@ class CanFilterApp:
         self.tree.heading("ID", text="ID (Hex)")
         self.tree.heading("Name", text="Name")
         
-        self.tree.column("Select", width=40, anchor="center")
-        self.tree.column("ID", width=100)
+        self.tree.column("Select", width=60, anchor="center")
+        self.tree.column("ID", width=120)
         self.tree.column("Name", width=400)
+        
+        # Configure tag for checked rows
+        self.tree.tag_configure('checked', background='#e6ffe6') # Light green
         
         # Bind click for checkbox
         self.tree.bind("<Button-1>", self.on_tree_click)
@@ -77,7 +82,7 @@ class CanFilterApp:
         self.result_frame = ttk.LabelFrame(bottom_frame, text="Results", padding="10")
         self.result_frame.pack(fill=tk.X, pady=10)
         
-        self.result_label = ttk.Label(self.result_frame, text="Load a DBC file and select IDs to calculate.", font=("Consolas", 10))
+        self.result_label = ttk.Label(self.result_frame, text="Load a DBC file and select IDs to calculate.", font=("Consolas", 11))
         self.result_label.pack(anchor=tk.W)
         
         self.checked_ids = set() # Keep track of checked IDs even when filtering
@@ -124,8 +129,10 @@ class CanFilterApp:
             
         for mid, name in items:
             # Check if this ID is in checked_ids
-            check_mark = "☑" if mid in self.checked_ids else "☐"
-            self.tree.insert("", tk.END, values=(check_mark, f"0x{mid:X}", name), iid=str(mid))
+            is_checked = mid in self.checked_ids
+            check_mark = "☑" if is_checked else "☐"
+            tags = ('checked',) if is_checked else ()
+            self.tree.insert("", tk.END, values=(check_mark, f"0x{mid:X}", name), iid=str(mid), tags=tags)
 
     def on_tree_click(self, event):
         region = self.tree.identify("region", event.x, event.y)
@@ -137,19 +144,10 @@ class CanFilterApp:
             return
 
         item_id = self.tree.identify_row(event.y)
-        column = self.tree.identify_column(event.x)
-        
         if not item_id:
             return
             
-        # Toggle if clicked on the checkbox column (#1) or anywhere on the row? 
-        # User said "checkboxes for every element", usually implies clicking the box.
-        # But for better UX, clicking the row to toggle is often nice too if selectmode is none.
-        # Let's stick to column #1 for strict checkbox behavior, or maybe allow row click.
-        # Given "checkboxes", let's make the checkbox column the interactive part.
-        
-        if column == "#1":
-            self.toggle_item(item_id)
+        self.toggle_item(item_id)
 
     def toggle_item(self, item_id):
         # item_id is the CAN ID (string)
@@ -159,11 +157,11 @@ class CanFilterApp:
         if mid in self.checked_ids:
             self.checked_ids.remove(mid)
             new_mark = "☐"
+            self.tree.item(item_id, values=(new_mark, current_values[1], current_values[2]), tags=())
         else:
             self.checked_ids.add(mid)
             new_mark = "☑"
-            
-        self.tree.item(item_id, values=(new_mark, current_values[1], current_values[2]))
+            self.tree.item(item_id, values=(new_mark, current_values[1], current_values[2]), tags=('checked',))
 
     def toggle_all(self):
         # Check if all currently visible are checked
@@ -183,9 +181,11 @@ class CanFilterApp:
         # Refresh view
         for item in self.tree.get_children():
             mid = int(item)
-            check_mark = "☑" if mid in self.checked_ids else "☐"
+            is_checked = mid in self.checked_ids
+            check_mark = "☑" if is_checked else "☐"
+            tags = ('checked',) if is_checked else ()
             current_values = self.tree.item(item, "values")
-            self.tree.item(item, values=(check_mark, current_values[1], current_values[2]))
+            self.tree.item(item, values=(check_mark, current_values[1], current_values[2]), tags=tags)
 
     def calculate(self):
         if not self.checked_ids:
