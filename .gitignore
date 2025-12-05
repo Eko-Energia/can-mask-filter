@@ -2,3 +2,4 @@ src/build/
 src/can_filter_app/
 src/dist/
 src/__pycache__/
+src/*.spec
