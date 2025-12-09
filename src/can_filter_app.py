@@ -36,7 +36,7 @@ class CanFilterApp:
         self.clear_btn.pack(side=tk.LEFT, padx=5)
         
         self.search_var = tk.StringVar()
-        self.search_var.trace("w", self.filter_list)
+        self.search_var.trace_add("write", self.filter_list)
         self.search_entry = ttk.Entry(top_frame, textvariable=self.search_var, width=30, font=('Segoe UI', 10))
         self.search_entry.pack(side=tk.LEFT, padx=5)
         self.search_entry.insert(0, "Search ID or Name...")
@@ -80,9 +80,17 @@ class CanFilterApp:
         
         # Max Filters Config
         self.max_filters_var = tk.IntVar(value=3)
+        self.auto_filters_var = tk.BooleanVar(value=True)
+        
         ttk.Label(bottom_frame, text="Max Filters:").pack(side=tk.LEFT, padx=5)
         self.max_filters_spin = ttk.Spinbox(bottom_frame, from_=1, to=20, textvariable=self.max_filters_var, width=5)
         self.max_filters_spin.pack(side=tk.LEFT, padx=5)
+        
+        self.auto_check = ttk.Checkbutton(bottom_frame, text="Auto", variable=self.auto_filters_var, command=self.toggle_max_filters)
+        self.auto_check.pack(side=tk.LEFT, padx=5)
+
+        # Initialize state based on default value
+        self.toggle_max_filters()
 
         self.calc_btn = ttk.Button(bottom_frame, text="Calculate Mask & Filter", command=self.calculate)
         self.calc_btn.pack(side=tk.LEFT, padx=20)
@@ -101,6 +109,12 @@ class CanFilterApp:
         self.set_result_text("Load a DBC file and select IDs to calculate.")
         
         self.checked_ids = set() # Keep track of checked IDs even when filtering
+
+    def toggle_max_filters(self):
+        if self.auto_filters_var.get():
+            self.max_filters_spin.configure(state=tk.DISABLED)
+        else:
+            self.max_filters_spin.configure(state=tk.NORMAL)
 
     def load_dbc(self):
         file_path = filedialog.askopenfilename(filetypes=[("DBC Files", "*.dbc"), ("All Files", "*.*")])
@@ -233,13 +247,21 @@ class CanFilterApp:
                     unselected_ids.append(msg.frame_id)
         
         try:
-            max_filters = int(self.max_filters_var.get())
+            if self.auto_filters_var.get():
+                # In Auto mode, we allow as many filters as needed to avoid collisions
+                # We simply pass a large number (e.g. number of selected IDs or a high hardware limit like 20)
+                # If the algorithm finds 0-collision merges, it takes them. 
+                # If it hits a wall where merging causes collisions, it stops if we are under max_filters.
+                max_filters = 20 # Common hardware limit, or could be len(selected_ids)
+            else:
+                max_filters = int(self.max_filters_var.get())
         except:
             max_filters = 1
             
         results, collisions = calculate_multiple_masks_filters(selected_ids, unselected_ids, max_filters)
         
-        res_text = f"Selected IDs: {len(selected_ids)} | Max Filters: {max_filters} | Used: {len(results)}\n\n"
+        mode_str = "Auto" if self.auto_filters_var.get() else str(max_filters)
+        res_text = f"Selected IDs: {len(selected_ids)} | Max Filters: {mode_str} | Used: {len(results)}\n\n"
         
         for i, (mask, filter_val) in enumerate(results):
             res_text += f"Set {i+1}:\n"
