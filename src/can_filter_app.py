@@ -157,6 +157,24 @@ class CanFilterApp:
                 
             self.checked_ids.clear()
             self.update_list(self.node_structure)
+            
+            # Check availability of GenMsgCycleTime or msg.cycle_time for Data Rate button
+            has_cycle_info = False
+            for msg in self.all_messages:
+                # Check safe access to attributes
+                has_attr_cycle = False
+                if hasattr(msg, 'attributes') and msg.attributes and 'GenMsgCycleTime' in msg.attributes:
+                    has_attr_cycle = True
+                
+                if (hasattr(msg, 'cycle_time') and msg.cycle_time) or has_attr_cycle:
+                    has_cycle_info = True
+                    break
+            
+            if has_cycle_info:
+                self.rate_btn.configure(state=tk.NORMAL)
+            else:
+                self.rate_btn.configure(state=tk.DISABLED)
+
             messagebox.showinfo("Success", f"Loaded {len(self.all_messages)} messages in {len(self.node_structure)} nodes.")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load DBC: {e}")
@@ -227,7 +245,7 @@ class CanFilterApp:
                 cycle_time = 0
                 if msg.cycle_time:
                     cycle_time = msg.cycle_time
-                elif 'GenMsgCycleTime' in msg.attributes:
+                elif hasattr(msg, 'attributes') and msg.attributes and 'GenMsgCycleTime' in msg.attributes:
                      # cantools might put it in .attributes dictionary depending on parsing
                      try:
                          cycle_time = int(msg.attributes['GenMsgCycleTime'])
@@ -267,7 +285,7 @@ class CanFilterApp:
                 cycle_time = "0"
                 if msg.cycle_time:
                     cycle_time = str(msg.cycle_time)
-                elif 'GenMsgCycleTime' in msg.attributes:
+                elif hasattr(msg, 'attributes') and msg.attributes and 'GenMsgCycleTime' in msg.attributes:
                      cycle_time = str(msg.attributes['GenMsgCycleTime'])
 
                 freq_str = "-"
@@ -432,7 +450,7 @@ class CanFilterApp:
             cycle_time = 0
             if msg.cycle_time:
                 cycle_time = msg.cycle_time
-            elif 'GenMsgCycleTime' in msg.attributes:
+            elif hasattr(msg, 'attributes') and msg.attributes and 'GenMsgCycleTime' in msg.attributes:
                  try:
                      cycle_time = int(msg.attributes['GenMsgCycleTime'])
                  except:
