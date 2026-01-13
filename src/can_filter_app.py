@@ -104,6 +104,9 @@ class CanFilterApp:
 
         self.rate_btn = ttk.Button(bottom_frame, text="Calculate Data Rate", command=self.calculate_data_rate)
         self.rate_btn.pack(side=tk.LEFT, padx=5)
+
+        self.gen_header_btn = ttk.Button(bottom_frame, text="Generate .h", command=self.generate_header)
+        self.gen_header_btn.pack(side=tk.LEFT, padx=5)
         
         # Result Display
         self.result_frame = ttk.LabelFrame(bottom_frame, text="Results", padding="10")
@@ -425,6 +428,79 @@ class CanFilterApp:
         # Refresh all nodes
         for node in all_visible_nodes:
             self.refresh_node_visuals(node)
+
+    def generate_header(self):
+        if not self.db:
+             messagebox.showerror("Error", "No DBC loaded.")
+             return
+
+        # Prompt for save location
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".h",
+            filetypes=[("Header Files", "*.h"), ("All Files", "*.*")],
+            initialfile="can_id_list.h"
+        )
+        
+        if not file_path:
+            return
+            
+        try:
+            with open(file_path, 'w') as f:
+                # File Header
+                f.write("/*\n")
+                f.write(" * can_id_list.h\n")
+                f.write(" */\n\n")
+                
+                f.write("#ifndef INC_CAN_ID_LIST_H_\n")
+                f.write("#define INC_CAN_ID_LIST_H_\n\n")
+                
+                # Optional: Add standard IDs if needed, or leave blank as requested
+                f.write("#define SAFE_STATE_ID \t0\n")
+                f.write("#define ERROR_MSG_ID\t1\n\n")
+
+                # Sort nodes
+                sorted_nodes = sorted(self.node_structure.keys())
+                
+                for node_name in sorted_nodes:
+                    f.write(f"/*\n * {node_name}\n */\n\n")
+                    
+                    msgs = self.node_structure[node_name]
+                    # Sort messages by ID
+                    msgs.sort(key=lambda x: x.frame_id)
+                    
+                    for msg in msgs:
+                        # Construct Macro Name
+                        # [ModuleName]_[ShortMessageName]_ID
+                        
+                        n_str = node_name.upper().replace(" ", "_")
+                        m_str = msg.name.upper().replace(" ", "_")
+                        
+                        # Heuristic to avoid duplication (e.g. RCD_RCD_Error -> RCD_ERROR)
+                        if m_str.startswith(n_str + "_"):
+                            base_name = m_str
+                        elif m_str == n_str: # Unusual but possible
+                            base_name = m_str
+                        else:
+                            base_name = f"{n_str}_{m_str}"
+                            
+                        macro_name = f"{base_name}_ID"
+                        
+                        # Sanitize
+                        macro_name = "".join(c if c.isalnum() or c == '_' else '_' for c in macro_name)
+                        
+                        # ID in Hex
+                        hex_id = f"0x{msg.frame_id:X}"
+                        
+                        f.write(f"#define {macro_name} {hex_id}\n")
+                    
+                    f.write("\n")
+                
+                f.write("#endif /* INC_CAN_ID_LIST_H_ */\n")
+            
+            messagebox.showinfo("Success", f"File saved to {file_path}")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save file: {e}")
 
     def calculate_data_rate(self):
         if not self.checked_ids:
