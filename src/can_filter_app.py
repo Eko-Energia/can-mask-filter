@@ -8,7 +8,7 @@ class CanFilterApp:
     def __init__(self, root):
         self.root = root
         self.root.title("CAN Mask/Filter Calculator")
-        self.root.geometry("1200x800")
+        self.root.geometry("1200x1000")
         
         # Style
         self.style = ttk.Style()
@@ -88,25 +88,40 @@ class CanFilterApp:
         # Max Filters Config
         self.max_filters_var = tk.IntVar(value=3)
         self.auto_filters_var = tk.BooleanVar(value=True)
+
+        # Control Panel Container
+        control_panel = ttk.Frame(bottom_frame)
+        control_panel.pack(fill=tk.X, pady=(0, 5))
+
+        # Configuration Frame
+        config_frame = ttk.LabelFrame(control_panel, text="Configuration", padding="5")
+        config_frame.pack(side=tk.LEFT, padx=(0, 10), fill=tk.Y)
         
-        ttk.Label(bottom_frame, text="Max Filters:").pack(side=tk.LEFT, padx=5)
-        self.max_filters_spin = ttk.Spinbox(bottom_frame, from_=1, to=20, textvariable=self.max_filters_var, width=5)
+        ttk.Label(config_frame, text="Max Filters:").pack(side=tk.LEFT, padx=5)
+        self.max_filters_spin = ttk.Spinbox(config_frame, from_=1, to=20, textvariable=self.max_filters_var, width=5)
         self.max_filters_spin.pack(side=tk.LEFT, padx=5)
         
-        self.auto_check = ttk.Checkbutton(bottom_frame, text="Auto", variable=self.auto_filters_var, command=self.toggle_max_filters)
+        self.auto_check = ttk.Checkbutton(config_frame, text="Auto", variable=self.auto_filters_var, command=self.toggle_max_filters)
         self.auto_check.pack(side=tk.LEFT, padx=5)
+
+        # Actions Frame
+        actions_frame = ttk.LabelFrame(control_panel, text="Actions", padding="5")
+        actions_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        actions_frame.columnconfigure(0, weight=1)
+        actions_frame.columnconfigure(1, weight=1)
+
+        self.calc_btn = ttk.Button(actions_frame, text="Calculate Mask & Filter", command=self.calculate)
+        self.calc_btn.grid(row=0, column=0, columnspan=2, padx=5, pady=2, sticky="ew")
+
+        self.rate_btn = ttk.Button(actions_frame, text="Calculate Data Rate", command=self.calculate_data_rate)
+        self.rate_btn.grid(row=1, column=0, padx=5, pady=2, sticky="ew")
+
+        self.gen_header_btn = ttk.Button(actions_frame, text="Generate .h", command=self.generate_header)
+        self.gen_header_btn.grid(row=1, column=1, padx=5, pady=2, sticky="ew")
 
         # Initialize state based on default value
         self.toggle_max_filters()
-
-        self.calc_btn = ttk.Button(bottom_frame, text="Calculate Mask & Filter", command=self.calculate)
-        self.calc_btn.pack(side=tk.LEFT, padx=20)
-
-        self.rate_btn = ttk.Button(bottom_frame, text="Calculate Data Rate", command=self.calculate_data_rate)
-        self.rate_btn.pack(side=tk.LEFT, padx=5)
-
-        self.gen_header_btn = ttk.Button(bottom_frame, text="Generate .h", command=self.generate_header)
-        self.gen_header_btn.pack(side=tk.LEFT, padx=5)
         
         # Result Display
         self.result_frame = ttk.LabelFrame(bottom_frame, text="Results", padding="10")
