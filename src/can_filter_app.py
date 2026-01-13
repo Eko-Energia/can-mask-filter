@@ -557,13 +557,16 @@ class CanFilterApp:
                 bits_per_frame = 47 + (8 * msg.length)
                 bits_s = freq * bits_per_frame
                 
-                total_bytes_sec += bytes_s
                 total_frames_sec += freq
                 total_bits_sec += bits_s
 
         # Bus Load Calculation (500 kbps)
         baud_rate = 500000.0
         bus_load_percent = (total_bits_sec / baud_rate) * 100.0
+        
+        # Total Data Rate (including overhead)
+        # Convert total bits/sec to bytes/sec
+        total_bytes_on_wire_sec = total_bits_sec / 8.0
         
         # Determine Status
         status_msg = ""
@@ -577,7 +580,7 @@ class CanFilterApp:
             status_msg = "CRITICAL: Bus overload likely!"
 
         res_text = f"Data Rate Calculation for {len(sorted_ids)} selected IDs:\n\n"
-        res_text += f"Total Data Rate:  {total_bytes_sec:.2f} B/s ({total_bytes_sec/1024:.2f} kB/s)\n"
+        res_text += f"Total Data Rate:  {total_bytes_on_wire_sec:.2f} B/s ({total_bytes_on_wire_sec/1024:.2f} kB/s)\n"
         res_text += f"Total Frame Rate: {total_frames_sec:.2f} frames/s\n\n"
         
         res_text += f"Bus Load (approx. @ 500kbps):\n"
