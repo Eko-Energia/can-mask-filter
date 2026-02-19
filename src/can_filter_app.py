@@ -498,7 +498,7 @@ class CanFilterApp:
                         else:
                             base_name = f"{n_str}_{m_str}"
                             
-                        macro_name = f"{base_name}_ID"
+                        macro_name = f"CANID_{base_name}"
                         
                         # Sanitize
                         macro_name = "".join(c if c.isalnum() or c == '_' else '_' for c in macro_name)
