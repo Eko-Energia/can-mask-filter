@@ -2,6 +2,8 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import cantools
 import os
+import urllib.request
+import threading
 from filter_calculator import calculate_mask_filter, calculate_multiple_masks_filters, format_hex_bin
 
 class CanFilterApp:
@@ -138,6 +140,9 @@ class CanFilterApp:
         
         self.checked_ids = set() # Keep track of checked IDs
         self.node_structure = {} # {NodeName: [msg_obj, ...]}
+        
+        self.set_result_text("Downloading latest DBC from GitHub...")
+        threading.Thread(target=self.auto_download_dbc, daemon=True).start()
 
     def toggle_max_filters(self):
         if self.auto_filters_var.get():
@@ -145,13 +150,28 @@ class CanFilterApp:
         else:
             self.max_filters_spin.configure(state=tk.NORMAL)
 
+    def auto_download_dbc(self):
+        url = "https://raw.githubusercontent.com/Eko-Energia/CAN-DATABASE/master/CAN_DB.dbc"
+        try:
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req) as response:
+                dbc_string = response.read().decode('utf-8')
+            self.root.after(0, self.load_dbc_internal, None, dbc_string, True)
+        except Exception as e:
+            self.root.after(0, self.set_result_text, f"Failed to download default DBC from GitHub:\n{e}\n\nPlease load a DBC manually.")
+
     def load_dbc(self):
         file_path = filedialog.askopenfilename(filetypes=[("DBC Files", "*.dbc"), ("All Files", "*.*")])
         if not file_path:
             return
-            
+        self.load_dbc_internal(file_path, None, False)
+
+    def load_dbc_internal(self, file_path=None, dbc_string=None, is_auto=False):
         try:
-            self.db = cantools.database.load_file(file_path)
+            if dbc_string is not None:
+                self.db = cantools.database.load_string(dbc_string)
+            else:
+                self.db = cantools.database.load_file(file_path)
             self.all_messages = []
             self.node_structure = {}
             
@@ -193,9 +213,16 @@ class CanFilterApp:
             else:
                 self.rate_btn.configure(state=tk.DISABLED)
 
-            messagebox.showinfo("Success", f"Loaded {len(self.all_messages)} messages in {len(self.node_structure)} nodes.")
+            if is_auto:
+                self.set_result_text(f"Auto-loaded latest DBC from GitHub: {len(self.all_messages)} messages in {len(self.node_structure)} nodes.")
+            else:
+                self.set_result_text(f"Loaded DBC: {len(self.all_messages)} messages in {len(self.node_structure)} nodes.")
+                messagebox.showinfo("Success", f"Loaded {len(self.all_messages)} messages in {len(self.node_structure)} nodes.")
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to load DBC: {e}")
+            if is_auto:
+                self.set_result_text(f"Failed to auto-load DBC: {e}")
+            else:
+                messagebox.showerror("Error", f"Failed to load DBC: {e}")
 
     def set_result_text(self, text):
         self.result_text.config(state=tk.NORMAL)
